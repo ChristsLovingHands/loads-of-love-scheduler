@@ -97,6 +97,26 @@ function buildCancelUrl(token: string) {
   return `${getAppUrl()}/cancel/${token}`;
 }
 
+const duplicateSessionCheckSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  eventId: z.string().min(1, "Event ID is required"),
+  timeSlotId: z.string().min(1, "Time slot ID is required"),
+});
+
+async function checkDuplicateSession(body: unknown) {
+  const validatedData = duplicateSessionCheckSchema.parse(body);
+  const isDuplicate = await storage.checkDuplicateSessionRegistration(
+    validatedData.email,
+    validatedData.eventId,
+    validatedData.timeSlotId,
+  );
+
+  return NextResponse.json({
+    duplicate: isDuplicate,
+    message: isDuplicate ? "you are already signed up for this session" : null,
+  });
+}
+
 async function sendRegistrationEmails(params: {
   registration: Awaited<ReturnType<typeof storage.createRegistration>>;
   eventId: string;
@@ -615,6 +635,10 @@ async function handleRequest(request: NextRequest, context: RouteContext) {
         },
         { status: 201 },
       );
+    }
+
+    if (request.method === "POST" && pathKey === "register/check-duplicate") {
+      return checkDuplicateSession(await readBody(request));
     }
 
     if (request.method === "POST" && pathKey === "waitlist") {

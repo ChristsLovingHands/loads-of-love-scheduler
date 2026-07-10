@@ -51,6 +51,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch event" });
     }
   });
+
+  app.post("/api/register/check-duplicate", async (req, res) => {
+    try {
+      const validatedData = z.object({
+        email: z.string().email("Valid email is required"),
+        eventId: z.string().min(1, "Event ID is required"),
+        timeSlotId: z.string().min(1, "Time slot ID is required"),
+      }).parse(req.body);
+
+      const isDuplicate = await storage.checkDuplicateSessionRegistration(
+        validatedData.email,
+        validatedData.eventId,
+        validatedData.timeSlotId
+      );
+
+      res.json({
+        duplicate: isDuplicate,
+        message: isDuplicate ? "you are already signed up for this session" : null,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid duplicate check data",
+          errors: error.errors,
+        });
+      }
+
+      console.error("Error checking duplicate registration:", error);
+      res.status(500).json({ message: "Failed to check registration" });
+    }
+  });
   
   // Register for time slot or join waitlist
   app.post("/api/register", checkBlacklistMiddleware, async (req, res) => {

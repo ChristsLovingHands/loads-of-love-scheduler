@@ -36,6 +36,7 @@ export default function Register() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [checkedItems, setCheckedItems] = useState({
     noShow: false,
     transportation: false,
@@ -145,6 +146,52 @@ export default function Register() {
     
     // Trigger validation for current step fields
     const isValid = await form.trigger(fieldsToValidate);
+
+    if (isValid && currentStep === 1 && eventId && timeSlotId) {
+      setIsCheckingDuplicate(true);
+
+      try {
+        const response = await fetch("/api/register/check-duplicate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: form.getValues("email"),
+            eventId,
+            timeSlotId,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || "Unable to check registration");
+        }
+
+        if (result.duplicate) {
+          const message = result.message || "you are already signed up for this session";
+          form.setError("email", { type: "manual", message });
+          toast({
+            variant: "destructive",
+            title: "Already signed up",
+            description: message,
+            duration: 5000,
+          });
+          return;
+        }
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Registration Check Failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+          duration: 5000,
+        });
+        return;
+      } finally {
+        setIsCheckingDuplicate(false);
+      }
+    }
     
     if (isValid && currentStep < 3) {
       setCurrentStep(currentStep + 1);
@@ -237,9 +284,9 @@ export default function Register() {
             </div>
 
             <div className="flex gap-3 mt-6">
-              <Button type="button" onClick={nextStep} className="flex-1">
-                Continue to Address
-                <ArrowRight className="w-4 h-4 ml-2" />
+              <Button type="button" onClick={nextStep} className="flex-1" disabled={isCheckingDuplicate}>
+                {isCheckingDuplicate ? "Checking..." : "Continue to Address"}
+                {!isCheckingDuplicate && <ArrowRight className="w-4 h-4 ml-2" />}
               </Button>
             </div>
           </div>
