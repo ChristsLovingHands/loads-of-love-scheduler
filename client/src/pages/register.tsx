@@ -309,13 +309,13 @@ export default function Register() {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <Button type="button" variant="outline" onClick={handleBack} className="flex-1">
+            <div className="grid grid-cols-1 gap-3 mt-6 lg:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)]">
+              <Button type="button" variant="outline" onClick={handleBack} className="w-full">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
-              <Button type="button" onClick={nextStep} className="flex-1">
-                Continue to Confirmation
+              <Button type="button" onClick={nextStep} className="h-auto min-h-10 w-full min-w-0 whitespace-normal py-2">
+                <span className="min-w-0 text-center leading-tight">Continue to Confirmation</span>
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>

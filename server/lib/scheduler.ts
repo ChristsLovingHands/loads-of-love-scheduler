@@ -30,19 +30,21 @@ async function sendReminder(registration: RegistrationWithDetails) {
     return false;
   }
 
-  await sendReminderEmail(
-    {
-      name: registration.name,
-      email: registration.email,
-      eventTitle: registration.event.title,
-      eventDate: formatEmailDate(registration.timeSlot.startTime),
-      eventTime: `${formatEmailTime(registration.timeSlot.startTime)} - ${formatEmailTime(registration.timeSlot.endTime)}`,
-      eventLocation: registration.event.laundromatName
-        ? `${registration.event.laundromatName}${registration.event.laundromatAddress ? `, ${registration.event.laundromatAddress}` : ""}`
-        : registration.event.location,
-      cancelUrl: buildCancelUrl(registration.uniqueCancelToken),
-    },
-  );
+  const sent = await sendReminderEmail({
+    name: registration.name,
+    email: registration.email,
+    eventTitle: registration.event.title,
+    eventDate: formatEmailDate(registration.timeSlot.startTime),
+    eventTime: `${formatEmailTime(registration.timeSlot.startTime)} - ${formatEmailTime(registration.timeSlot.endTime)}`,
+    eventLocation: registration.event.laundromatName
+      ? `${registration.event.laundromatName}${registration.event.laundromatAddress ? `, ${registration.event.laundromatAddress}` : ""}`
+      : registration.event.location,
+    cancelUrl: buildCancelUrl(registration.uniqueCancelToken),
+  });
+
+  if (!sent) {
+    return false;
+  }
 
   await storage.markReminderSent(registration.id, "day-before");
   return true;

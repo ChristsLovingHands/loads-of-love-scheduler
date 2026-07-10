@@ -24,6 +24,7 @@ import {
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, count, sql } from "drizzle-orm";
 import { getAppUrl } from "./lib/app-url";
+import { formatForDateInput } from "@shared/timezone";
 
 export interface IStorage {
   // Events
@@ -50,6 +51,7 @@ export interface IStorage {
   updateRegistrationStatus(id: string, status: 'confirmed' | 'waitlist' | 'cancelled' | 'no-show'): Promise<void>;
   deleteRegistration(id: string): Promise<void>;
   checkDuplicateRegistration(email: string, phone: string, eventId: string): Promise<boolean>;
+  checkDuplicateSessionRegistration(email: string, eventId: string, timeSlotId: string): Promise<boolean>;
   notifyWaitlist(eventId: string, timeSlotId: string): Promise<void>;
   
   // Blacklist
@@ -475,6 +477,27 @@ export class DatabaseStorage implements IStorage {
         ));
       return !!existing;
     }
+  }
+
+  async checkDuplicateSessionRegistration(email: string, eventId: string, timeSlotId: string): Promise<boolean> {
+    const timeSlotsForEvent = await this.getTimeSlotsByEvent(eventId);
+    const targetSlot = timeSlotsForEvent.find((slot) => slot.id === timeSlotId);
+
+    if (!targetSlot) {
+      return false;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const targetSessionDate = formatForDateInput(targetSlot.startTime);
+    const existingRegistrations = await this.getRegistrationsByEvent(eventId);
+
+    return existingRegistrations.some((registration) => {
+      const isActive = registration.status === "confirmed" || registration.status === "waitlist";
+      const sameEmail = registration.email.trim().toLowerCase() === normalizedEmail;
+      const sameSessionDate = formatForDateInput(registration.timeSlot.startTime) === targetSessionDate;
+
+      return isActive && sameEmail && sameSessionDate;
+    });
   }
 
   async addToBlacklist(blacklistItem: InsertBlacklist): Promise<Blacklist> {

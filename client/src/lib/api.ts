@@ -27,7 +27,18 @@ export async function apiRequest(
   
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || response.statusText);
+    let message = errorText || response.statusText;
+
+    try {
+      const parsed = JSON.parse(errorText);
+      if (typeof parsed.message === "string") {
+        message = parsed.message;
+      }
+    } catch {
+      // Keep the raw response text when the API does not return JSON.
+    }
+
+    throw new Error(message);
   }
   
   return response;

@@ -167,18 +167,24 @@ async function createRegistration(body: unknown, isAdmin = false) {
     };
   }
 
-  const isDuplicate = await storage.checkDuplicateRegistration(
-    validatedData.email,
-    validatedData.phone || "",
-    validatedData.eventId,
-  );
+  const isDuplicate = isAdmin
+    ? await storage.checkDuplicateRegistration(
+        validatedData.email,
+        validatedData.phone || "",
+        validatedData.eventId,
+      )
+    : await storage.checkDuplicateSessionRegistration(
+        validatedData.email,
+        validatedData.eventId,
+        validatedData.timeSlotId,
+      );
 
   if (isDuplicate) {
     return {
       error: json(
         isAdmin
           ? "This person is already registered for this event"
-          : "You are already registered for this event",
+          : "you are already signed up for this session",
         400,
       ),
     };
@@ -228,14 +234,14 @@ async function createRegistration(body: unknown, isAdmin = false) {
 
 async function createWaitlistRegistration(body: unknown) {
   const validatedData = insertWaitlistSchema.parse(body);
-  const isDuplicate = await storage.checkDuplicateRegistration(
+  const isDuplicate = await storage.checkDuplicateSessionRegistration(
     validatedData.email,
-    "",
     validatedData.eventId,
+    validatedData.timeSlotId,
   );
 
   if (isDuplicate) {
-    return { error: json("You are already registered for this event", 400) };
+    return { error: json("you are already signed up for this session", 400) };
   }
 
   const registration = await storage.createRegistration({

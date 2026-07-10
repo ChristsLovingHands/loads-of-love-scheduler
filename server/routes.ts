@@ -57,16 +57,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertRegistrationSchema.parse(req.body);
       
-      // Check for duplicate registration
-      const isDuplicate = await storage.checkDuplicateRegistration(
-        validatedData.email, 
-        validatedData.phone || '', 
-        validatedData.eventId
+      // Check for duplicate registration on this session date regardless of time slot
+      const isDuplicate = await storage.checkDuplicateSessionRegistration(
+        validatedData.email,
+        validatedData.eventId,
+        validatedData.timeSlotId
       );
       
       if (isDuplicate) {
         return res.status(400).json({ 
-          message: "You are already registered for this event" 
+          message: "you are already signed up for this session" 
         });
       }
       
@@ -182,16 +182,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertWaitlistSchema.parse(req.body);
       
-      // Check for duplicate registration (for waitlist, only email is provided)
-      const isDuplicate = await storage.checkDuplicateRegistration(
-        validatedData.email, 
-        '', // No phone provided for waitlist registrations
-        validatedData.eventId
+      // Check for duplicate registration on this session date regardless of time slot
+      const isDuplicate = await storage.checkDuplicateSessionRegistration(
+        validatedData.email,
+        validatedData.eventId,
+        validatedData.timeSlotId
       );
       
       if (isDuplicate) {
         return res.status(400).json({ 
-          message: "You are already registered for this event" 
+          message: "you are already signed up for this session" 
         });
       }
       
