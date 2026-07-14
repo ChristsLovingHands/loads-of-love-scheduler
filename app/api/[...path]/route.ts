@@ -128,9 +128,8 @@ async function requireServingNetworkDeployment(request: NextRequest) {
 }
 
 async function buildServingNetworkOverview() {
-  const [events, stats, blacklist] = await Promise.all([
+  const [events, blacklist] = await Promise.all([
     storage.getActiveEvents(),
-    storage.getEventStats(),
     storage.getBlacklist(),
   ]);
 
@@ -184,18 +183,23 @@ async function buildServingNetworkOverview() {
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
     .slice(0, 50);
 
-  const noShowCount = stats.statusDistribution.no_show || 0;
+  const allRegistrations = upcomingEvents.flatMap((event) => event.registrations);
+  const confirmedRegistrations = allRegistrations.filter((registration) => registration.status === "confirmed").length;
+  const waitlistCount = allRegistrations.filter((registration) => registration.status === "waitlist").length;
+  const cancelledCount = allRegistrations.filter((registration) => registration.status === "cancelled").length;
+  const noShowCount = allRegistrations.filter((registration) => registration.status === "no-show").length;
+  const activeRegistrationCount = confirmedRegistrations + waitlistCount;
 
   return {
     stats: {
-      activeEvents: stats.activeEvents,
-      totalRegistrations: stats.totalRegistrations,
-      confirmedRegistrations: stats.statusDistribution.confirmed,
-      waitlistCount: stats.waitlistCount,
-      cancelledCount: stats.statusDistribution.cancelled,
+      activeEvents: upcomingEvents.length,
+      totalRegistrations: activeRegistrationCount,
+      confirmedRegistrations,
+      waitlistCount,
+      cancelledCount,
       noShowCount,
       blacklistCount: blacklist.length,
-      noShowRate: stats.noShowRate,
+      noShowRate: activeRegistrationCount > 0 ? Math.round((noShowCount / activeRegistrationCount) * 1000) / 10 : 0,
     },
     upcomingEvents,
     recentRegistrations,
