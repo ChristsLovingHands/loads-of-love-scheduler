@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 import {
   insertAdminRegistrationSchema,
@@ -95,6 +96,120 @@ function getEventLocation(event: Awaited<ReturnType<typeof storage.getEvent>>) {
 
 function buildCancelUrl(token: string) {
   return `${getAppUrl()}/cancel/${token}`;
+}
+
+const CLH_VERCEL_ISSUER = "https://oidc.vercel.com/christslovinghands-projects";
+const CLH_VERCEL_AUDIENCE = "https://vercel.com/christslovinghands-projects";
+const clhVercelJwks = createRemoteJWKSet(new URL(`${CLH_VERCEL_ISSUER}/.well-known/jwks`));
+
+async function requireServingNetworkDeployment(request: NextRequest) {
+  const token = getAuthorizationToken(request);
+  if (!token) {
+    return { error: json("Serving Network deployment token required", 401) };
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, clhVercelJwks, {
+      issuer: CLH_VERCEL_ISSUER,
+      audience: CLH_VERCEL_AUDIENCE,
+    });
+
+    if (
+      payload.owner !== "christslovinghands-projects" ||
+      payload.project !== "servingnetwork" ||
+      !["production", "preview"].includes(String(payload.environment))
+    ) {
+      return { error: json("Unauthorized deployment", 403) };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.warn("Serving Network deployment verification failed:", error);
+    return { error: json("Invalid deployment token", 401) };
+  }
+}
+
+async function buildServingNetworkOverview() {
+  const [events, stats, blacklist] = await Promise.all([
+    storage.getActiveEvents(),
+    storage.getEventStats(),
+    storage.getBlacklist(),
+  ]);
+
+  const upcomingEvents = await Promise.all(events.map(async (event) => {
+    const registrations = await storage.getRegistrationsByEvent(event.id);
+    const mappedRegistrations = registrations.map((registration) => ({
+      id: registration.id,
+      timeSlotId: registration.timeSlotId,
+      name: registration.name,
+      email: registration.email,
+      phone: registration.phone,
+      address: registration.address,
+      city: registration.city,
+      state: registration.state,
+      zipCode: registration.zipCode,
+      status: registration.status,
+      createdAt: registration.createdAt.toISOString(),
+      updatedAt: registration.updatedAt.toISOString(),
+      eventId: registration.eventId,
+      eventTitle: event.title,
+      eventDate: event.date.toISOString(),
+      slotStartTime: registration.timeSlot.startTime.toISOString(),
+      slotEndTime: registration.timeSlot.endTime.toISOString(),
+    }));
+
+    return {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      date: event.date.toISOString(),
+      location: event.location,
+      laundromatName: event.laundromatName,
+      laundromatAddress: event.laundromatAddress,
+      capacity: event.timeSlots.reduce((total, slot) => total + slot.capacity, 0),
+      confirmedCount: mappedRegistrations.filter((registration) => registration.status === "confirmed").length,
+      waitlistCount: mappedRegistrations.filter((registration) => registration.status === "waitlist").length,
+      slots: event.timeSlots.map((slot) => ({
+        id: slot.id,
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        capacity: slot.capacity,
+        confirmedCount: slot.registrationCount,
+        waitlistCount: slot.waitlistCount,
+      })),
+      registrations: mappedRegistrations,
+    };
+  }));
+
+  const recentRegistrations = upcomingEvents
+    .flatMap((event) => event.registrations)
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+    .slice(0, 50);
+
+  const noShowCount = stats.statusDistribution.no_show || 0;
+
+  return {
+    stats: {
+      activeEvents: stats.activeEvents,
+      totalRegistrations: stats.totalRegistrations,
+      confirmedRegistrations: stats.statusDistribution.confirmed,
+      waitlistCount: stats.waitlistCount,
+      cancelledCount: stats.statusDistribution.cancelled,
+      noShowCount,
+      blacklistCount: blacklist.length,
+      noShowRate: stats.noShowRate,
+    },
+    upcomingEvents,
+    recentRegistrations,
+    blacklist: blacklist.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      email: entry.email,
+      phone: entry.phone,
+      reason: entry.reason,
+      createdAt: entry.createdAt.toISOString(),
+    })),
+  };
 }
 
 const duplicateSessionCheckSchema = z.object({
@@ -604,6 +719,14 @@ async function handleRequest(request: NextRequest, context: RouteContext) {
   const pathKey = path.join("/");
 
   try {
+    if (request.method === "GET" && pathKey === "internal/servingnetwork/overview") {
+      const deployment = await requireServingNetworkDeployment(request);
+      if ("error" in deployment) {
+        return deployment.error;
+      }
+      return NextResponse.json(await buildServingNetworkOverview());
+    }
+
     if (request.method === "GET" && pathKey === "events") {
       try {
         await processRecurringEventCron();
