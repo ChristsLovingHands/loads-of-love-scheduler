@@ -99,7 +99,6 @@ function buildCancelUrl(token: string) {
 }
 
 const CLH_VERCEL_ISSUER = "https://oidc.vercel.com/christslovinghands-projects";
-const CLH_VERCEL_AUDIENCE = "https://vercel.com/christslovinghands-projects";
 const clhVercelJwks = createRemoteJWKSet(new URL(`${CLH_VERCEL_ISSUER}/.well-known/jwks`));
 
 async function requireServingNetworkDeployment(request: NextRequest) {
@@ -111,7 +110,6 @@ async function requireServingNetworkDeployment(request: NextRequest) {
   try {
     const { payload } = await jwtVerify(token, clhVercelJwks, {
       issuer: CLH_VERCEL_ISSUER,
-      audience: CLH_VERCEL_AUDIENCE,
     });
 
     if (
